@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from PIL import Image
 import qrcode
@@ -23,16 +23,25 @@ app = FastAPI()
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = datetime.utcnow()
-    logger.info(f"Incoming request: {request.method} {request.url}")
+
+    # Get client IP (works behind proxy if not configured with forwarded headers)
+    client_ip = request.client.host if request.client else "unknown"
+
+    logger.info(f"Incoming request: ip={client_ip} method={request.method} url={request.url}")
 
     try:
         response = await call_next(request)
-    except Exception as e:
-        logger.exception("Unhandled error occurred")
+    except Exception:
+        logger.exception(f"Unhandled error for ip={client_ip} url={request.url}")
         raise
 
     duration = (datetime.utcnow() - start_time).total_seconds()
-    logger.info(f"Completed {request.method} {request.url} in {duration:.3f}s status={response.status_code}")
+
+    logger.info(
+        f"Completed request: ip={client_ip} method={request.method} url={request.url} "
+        f"status={response.status_code} duration={duration:.3f}s"
+    )
+
     return response
 # -----------------------------
 # Endpoint 1: Generate QR code
